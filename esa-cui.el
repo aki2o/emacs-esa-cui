@@ -23,7 +23,9 @@
 
 (defsubst esa-cui::response-finished-p ()
   (and (not (string= esa-cui::response ""))
-       (= (string-to-char (substring esa-cui::response -1)) 3)))
+       (= (string-to-char (substring esa-cui::response -1)) 3)
+       (setq esa-cui::response (substring esa-cui::response 0 -1))
+       t))
 
 (defsubst esa-cui::quote-argument (s)
   (format "'%s'" (replace-regexp-in-string "'" "\\'" s)))
