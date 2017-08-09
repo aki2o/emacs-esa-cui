@@ -28,7 +28,9 @@
        t))
 
 (defsubst esal--quote-argument (s)
-  (format "'%s'" (replace-regexp-in-string "'" "\\'" s)))
+  (if s
+      (format "'%s'" (replace-regexp-in-string "'" "\\'" s))
+    ""))
 
 
 (defun esal--receive-response (proc res)
@@ -114,28 +116,42 @@
 (defun esal-exit ()
   (esal--request "exit"))
 
-(defun esal-ls (&optional path)
-  (esal--get-response (if path
-                             (format "ls %s" (esal--quote-argument path))
-                           "ls")))
-
 (defun esal-cd (path)
   (esal--request (format "cd %s" (esal--quote-argument path))))
 
-(defun* esal-cat (path &key json indent)
+(defun* esal-ls (path &key recursive category-only post-only)
+  (esal--get-response (format "ls%s%s%s%s"
+                              (if recursive " --recursive" "")
+                              (if category-only " --category" "")
+                              (if post-only " --post" "")
+                              (if path
+                                  (format " %s" (esal--quote-argument path))
+                                ""))))
+
+(defun* esal-cat (number &key json indent)
   (let ((cmd (format "cat %s%s%s"
                      (if json "--json " "")
                      (if indent "" "--noindent ")
-                     (esal--quote-argument path))))
+                     (esal--quote-argument number))))
     (esal--get-response cmd)))
 
-(defun esal-lock (path)
-  (esal--request (format "lock %s" (esal--quote-argument path))))
+(defun* esal-lock (number &key print)
+  (message
+   (esal--get-response (format "lock %s%s"
+                               (if print "--list " "")
+                               (esal--quote-argument number)))))
 
-(defun esal-unlock (path)
-  (esal--request (format "unlock %s" (esal--quote-argument path))))
+(defun* esal-unlock (number &key print)
+  (message
+   (esal--get-response (format "unlock %s%s"
+                               (if print "--list " "")
+                               (esal--quote-argument number)))))
 
-(defun* esal-update (path &key wip ship tags category name message without-body-p lock-keep-p)
+(defun esal-mv (&rest paths)
+  (message
+   (esal--get-response (format "mv %s" (mapconcat 'esal--quote-argument paths " ")))))
+
+(defun* esal-update (number &key wip ship tags category name message without-body-p lock-keep-p)
   (message
    (esal--get-response (format "update %s%s%s%s%s%s%s%s%s"
                                   (if wip "--wip " "")
@@ -154,10 +170,10 @@
                                     "")
                                   (if without-body-p "--nobody " "")
                                   (if lock-keep-p "--keeplock " "")
-                                  (esal--quote-argument path))
+                                  (esal--quote-argument number))
                           :waitsec 5)))
 
-(defun* esal-regist (path &key wip ship tags category name message)
+(defun* esal-regist (filepath &key wip ship tags category name message)
   (message
    (esal--get-response (format "regist %s%s%s%s%s%s%s"
                                   (if wip "--wip " "")
@@ -174,15 +190,14 @@
                                   (if message
                                       (format "--message=%s " (esal--quote-argument message))
                                     "")
-                                  (esal--quote-argument path))
+                                  (esal--quote-argument filepath))
                           :waitsec 5)))
 
-(defun* esal-sync (targets &key all force by-number)
+(defun* esal-sync (targets &key force by-number)
   (let* ((access-token (gethash esal--current-team esal--access-token-hash))
-         (cmd (format "esal sync %s -a %s -q %s%s%s%s"
+         (cmd (format "esal sync %s -a %s -q %s%s%s"
                       esal--current-team
                       access-token
-                      (if all "-a " "")
                       (if force "-f " "")
                       (if by-number "-n " "")
                       (mapconcat 'esal--quote-argument targets " "))))
