@@ -56,16 +56,14 @@
 (defun* esal--get-response (cmdstr &key waitsec)
   (esal--debug "Start get response. cmdstr[%s] waitsec[%s]" cmdstr waitsec)
   (let ((proc (esal-get-process))
-        (waiti 0)
-        (maxwaiti (* (or waitsec 1) 5)))
+        (wait-end-time (+ (string-to-number (format-time-string "%s")) (or waitsec 1))))
     (setq esal--response "")
     (process-send-string proc (concat cmdstr "\n"))
     (esal--trace "Start wait response from server.")
-    (while (and (< waiti maxwaiti)
+    (while (and (<= (string-to-number (format-time-string "%s")) wait-end-time)
                 (not (esal--response-finished-p)))
-      (accept-process-output proc 0.2 nil t)
-      (incf waiti))
-    (when (not (< waiti maxwaiti))
+      (accept-process-output proc 0.2 nil t))
+    (when (not (<= (string-to-number (format-time-string "%s")) wait-end-time))
       (esal--warn "Timeout get response of %s" cmdstr))
     (esal--trace "Got response from server.")
     esal--response))
@@ -92,7 +90,7 @@
          (access-token (gethash esal--current-team esal--access-token-hash))
          (cmd (format "esal login %s -a %s -non-interactive" esal--current-team access-token))
          (proc (start-process-shell-command procnm nil cmd))
-         (waiti 0))
+         (wait-end-time (+ (string-to-number (format-time-string "%s")) 5)))
     (set-process-filter proc 'esal--receive-response)
     (case system-type
       ((darwin)
@@ -100,10 +98,9 @@
       (t
        (set-process-coding-system proc 'utf-8-dos 'utf-8-unix)))
     (process-query-on-exit-flag proc)
-    (while (and (< waiti 50)
-                  (not (esal--response-finished-p)))
-        (accept-process-output proc 0.2 nil t)
-        (incf waiti))
+    (while (and (<= (string-to-number (format-time-string "%s")) wait-end-time)
+                (not (esal--response-finished-p)))
+      (accept-process-output proc 0.2 nil t))
     (puthash esal--current-team proc esal--process-hash)))
 
 ;;;###autoload
@@ -119,21 +116,22 @@
 (defun esal-cd (path)
   (esal--request (format "cd %s" (esal--quote-argument path))))
 
-(defun* esal-ls (path &key recursive category-only post-only)
+(defun* esal-ls (path &key recursive category-only post-only waitsec)
   (esal--get-response (format "ls%s%s%s%s"
                               (if recursive " --recursive" "")
                               (if category-only " --category" "")
                               (if post-only " --post" "")
                               (if path
                                   (format " %s" (esal--quote-argument path))
-                                ""))))
+                                ""))
+                      :waitsec (or waitsec 5)))
 
-(defun* esal-cat (number &key json indent)
+(defun* esal-cat (number &key json indent waitsec)
   (let ((cmd (format "cat %s%s%s"
                      (if json "--json " "")
                      (if indent "" "--noindent ")
                      (esal--quote-argument number))))
-    (esal--get-response cmd)))
+    (esal--get-response cmd :waitsec (or waitsec 3))))
 
 (defun* esal-lock (number &key print)
   (message
@@ -147,11 +145,12 @@
                                (if print "--list " "")
                                (esal--quote-argument number)))))
 
-(defun esal-mv (&rest paths)
+(defun* esal-mv (&rest paths &key waitsec)
   (message
-   (esal--get-response (format "mv %s" (mapconcat 'esal--quote-argument paths " ")))))
+   (esal--get-response (format "mv %s" (mapconcat 'esal--quote-argument paths " "))
+                       :waitsec (or waitsec 5))))
 
-(defun* esal-update (number &key wip ship tags category name message without-body-p lock-keep-p)
+(defun* esal-update (number &key wip ship tags category name message without-body-p lock-keep-p waitsec)
   (message
    (esal--get-response (format "update %s%s%s%s%s%s%s%s%s"
                                   (if wip "--wip " "")
@@ -171,9 +170,9 @@
                                   (if without-body-p "--nobody " "")
                                   (if lock-keep-p "--keeplock " "")
                                   (esal--quote-argument number))
-                          :waitsec 5)))
+                          :waitsec (or waitsec 5))))
 
-(defun* esal-regist (filepath &key wip ship tags category name message)
+(defun* esal-regist (filepath &key wip ship tags category name message waitsec)
   (message
    (esal--get-response (format "regist %s%s%s%s%s%s%s"
                                   (if wip "--wip " "")
@@ -191,7 +190,7 @@
                                       (format "--message=%s " (esal--quote-argument message))
                                     "")
                                   (esal--quote-argument filepath))
-                          :waitsec 5)))
+                          :waitsec (or waitsec 5))))
 
 (defun* esal-sync (targets &key force by-number)
   (let* ((access-token (gethash esal--current-team esal--access-token-hash))
