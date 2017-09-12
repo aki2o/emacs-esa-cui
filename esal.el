@@ -27,10 +27,10 @@
        (setq esal--response (substring esal--response 0 -1))
        t))
 
-(defsubst esal--quote-argument (s)
-  (if s
-      (format "'%s'" (replace-regexp-in-string "'" "\\'" s))
-    ""))
+(defsubst esal--quote-argument (v)
+  (cond ((stringp v) (format "'%s'" (replace-regexp-in-string "'" "\\'" v)))
+        ((numberp v) (format "%s" v))
+        (t           "")))
 
 
 (defun esal--receive-response (proc res)
@@ -197,8 +197,8 @@
          (cmd (format "esal sync %s -a %s -q %s%s%s"
                       esal--current-team
                       access-token
-                      (if force "-f " "")
-                      (if by-number "-n " "")
+                      (if force "--force " "")
+                      (if by-number "--number " "")
                       (mapconcat 'esal--quote-argument targets " "))))
     (async-shell-command cmd)))
 
