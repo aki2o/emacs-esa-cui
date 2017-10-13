@@ -194,13 +194,14 @@
 
 (defun* esal-sync (targets &key force by-number)
   (let* ((access-token (gethash esal--current-team esal--access-token-hash))
-         (cmd (format "esal sync %s -a %s -q %s%s%s"
-                      esal--current-team
+         (cmd (format "esal login -a %s -e %s \"sync -q %s%s%s\""
                       access-token
+                      esal--current-team
                       (if force "--force " "")
                       (if by-number "--number " "")
                       (mapconcat 'esal--quote-argument targets " "))))
-    (async-shell-command cmd)))
+    (with-temp-buffer
+      (shell-command cmd (current-buffer)))))
 
 
 (defun esal-teams ()
